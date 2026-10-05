@@ -1,0 +1,17 @@
+#VSCode metadata
+.vscode/
+
+#ROS2 colcon build artifacts
+build/
+install/
+log/
+
+#C++ artifacts
+*.o
+*.a
+*.so
+*.out
+
+#Python artifacts
+_pycache__/
+*.pyc
