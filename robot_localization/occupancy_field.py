@@ -16,69 +16,90 @@ class OccupancyField(object):
     """
 
     def __init__(self, node):
-        # grab the map from the map server
-        self.cli = node.create_client(GetMap, 'map_server/map')
-        while not self.cli.wait_for_service(timeout_sec=1.0):
-            node.get_logger().info('service not available, waiting again...')
-        self.future = self.cli.call_async(GetMap.Request())
-        rclpy.spin_until_future_complete(node, self.future)
-        self.map = self.future.result().map
-        node.get_logger().info("map received width: {0} height: {1}".format(self.map.info.width, self.map.info.height))
-        # The coordinates of each grid cell in the map
-        X = np.zeros((self.map.info.width*self.map.info.height, 2))
+        #-------------------Grab the map from the map server------------------------------------------------
+        """
+        A ROS2 service client sends a request to a server and recieves a response.
+        Unlike a publisher/subscriber which is a one way continous channel, a service 
+        is an on demand two way channel.
+        """
+        # Create a client for 'GetMap' to request an occupancy grid
+        self.cli = node.create_client(GetMap, 'map_server/map')               #initialize connection to the map server
 
-        # while we're at it let's count the number of occupied cells
-        total_occupied = 0
-        curr = 0
-        for i in range(self.map.info.width):
-            for j in range(self.map.info.height):
-                # occupancy grids are stored in row major order
-                ind = i + j*self.map.info.width
-                if self.map.data[ind] > 0:
-                    total_occupied += 1
-                X[curr, 0] = float(i)
-                X[curr, 1] = float(j)
-                curr += 1
+        while not self.cli.wait_for_service(timeout_sec=1.0):                 #if server has not responded within 1 second...
+            node.get_logger().info('service not available, waiting again...') #print message and try again
 
-        # The coordinates of each occupied grid cell in the map
-        occupied = np.zeros((total_occupied, 2))
-        curr = 0
-        for i in range(self.map.info.width):
-            for j in range(self.map.info.height):
+        # Request the map
+        self.future = self.cli.call_async(GetMap.Request())                                         #request and store response 
+        rclpy.spin_until_future_complete(node, self.future)                                         #listen for server response until it arrives
+        self.map = self.future.result().map                                                         #
+        node.get_logger().info("map received width: {0} height: {1}".format(self.map.info.width, 
+                                                                            self.map.info.height)) 
+        
+        # -------------------Setup the map and obstacles--------------------------------------------------------
+        # Create a grid of all the cells in the map
+        X = np.zeros((self.map.info.width*self.map.info.height, 2))   #initialize an empty grid the same width and height as map
+
+        total_occupied = 0   #starting point for current number of occupied map cells                                          
+        curr = 0             #starting row
+        
+        for i in range(self.map.info.width):                 #for each column...          
+            for j in range(self.map.info.height):            #...loop through each row...
+                ind = i + j*self.map.info.width              #...set up index system to track cells
+                
+                if self.map.data[ind] > 0:                   #if cell contains data...
+                    total_occupied += 1                      #...add cell to total occupied count
+                
+                X[curr, 0] = float(i)                        # store the cell's x coordinate                    
+                X[curr, 1] = float(j)                        # store the cell's y coordinate
+                curr += 1                                    # move on to the next row
+
+        # Create a list of just the occupied cells
+        occupied = np.zeros((total_occupied, 2))             # create an empty array to store two values per item (x and y corrdinates for each occupied cell)
+        curr = 0                                             #initalize current row to 0
+        
+        for i in range(self.map.info.width):                 #for each column...
+            for j in range(self.map.info.height):            #...loop through each row...
+                
                 # occupancy grids are stored in row major order
-                ind = i + j*self.map.info.width
-                if self.map.data[ind] > 0:
-                    occupied[curr, 0] = float(i)
-                    occupied[curr, 1] = float(j)
-                    curr += 1
-        node.get_logger().info("building ball tree")
-        # use super fast scikit learn nearest neighbor algorithm
+                ind = i + j*self.map.info.width              #...set up index system to track cells
+                
+                if self.map.data[ind] > 0:                   #if cell contains data...   
+                    occupied[curr, 0] = float(i)             # store the cell's x coordinate    
+                    occupied[curr, 1] = float(j)             # store the cell's y coordinate
+                    curr += 1                                # move on to the next row    
+        
+        node.get_logger().info("building ball tree")         #print
+
+        #-------Determine how close object is to obstacle using nearest neighbors algorithm-------
         nbrs = NearestNeighbors(n_neighbors=1,
-                                algorithm="ball_tree").fit(occupied)
-        node.get_logger().info("finding neighbors")
-        distances, indices = nbrs.kneighbors(X)
-
-        node.get_logger().info("populating occupancy field")
-        self.closest_occ = np.zeros((self.map.info.width, self.map.info.height))
-        curr = 0
-        for i in range(self.map.info.width):
-            for j in range(self.map.info.height):
+                                algorithm="ball_tree").fit(occupied)        #search for the closest occupied cell from specified point using ball tree method
+        node.get_logger().info("finding neighbors")                         #print
+        
+        distances, indices = nbrs.kneighbors(X)                             # search for closest occupied cell for each point in X and return distance and index
+        node.get_logger().info("populating occupancy field")                #print
+        
+        self.closest_occ = np.zeros((self.map.info.width, self.map.info.height)) #create empty grid same width and height as map
+        
+        for i in range(self.map.info.width):                                     #for each column...
+            for j in range(self.map.info.height):                                #...loop through each row...  
                 self.closest_occ[i, j] = \
-                    distances[curr][0]*self.map.info.resolution
-                curr += 1
-        self.occupied = occupied
-        node.get_logger().info("occupancy field ready")
+                    distances[curr][0]*self.map.info.resolution                  #...convert distance to meters and store
+                curr += 1                                                        # move on to the next row
+        
+        self.occupied = occupied                                            #store to reference later
+        node.get_logger().info("occupancy field ready")                     #print
 
     def get_obstacle_bounding_box(self):
         """
         Returns: the upper and lower bounds of x and y such that the resultant
-        bounding box contains all of the obstacles in the map.  The format of
-        the return value is ((x_lower, x_upper), (y_lower, y_upper))
+        bounding box contains all of the obstacles in the map.
         """
-        lower_bounds = self.occupied.min(axis=0)
-        upper_bounds = self.occupied.max(axis=0)
-        r = self.map.info.resolution
-        return ((lower_bounds[0]*r + self.map.info.origin.position.x,
+        lower_bounds = self.occupied.min(axis=0) #find the smallest x and y cordinates
+        upper_bounds = self.occupied.max(axis=0) #find the largest x and y cordinates
+        r = self.map.info.resolution             #cell size in meters
+        
+        # 
+        return ((lower_bounds[0]*r + self.map.info.origin.position.x,   #return (x_lower, x_upper), (y_lower, y_upper) in meters
                  upper_bounds[0]*r + self.map.info.origin.position.x),
                 (lower_bounds[1]*r + self.map.info.origin.position.y,
                  upper_bounds[1]*r + self.map.info.origin.position.y))
@@ -89,6 +110,7 @@ class OccupancyField(object):
             will be returned. """
         x_coord = (x - self.map.info.origin.position.x)/self.map.info.resolution
         y_coord = (y - self.map.info.origin.position.y)/self.map.info.resolution
+        
         if type(x) is np.ndarray:
             x_coord = x_coord.astype(np.int)
             y_coord = y_coord.astype(np.int)
