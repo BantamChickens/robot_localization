@@ -16,28 +16,35 @@ from copy import deepcopy
 from numpy.random import random_sample
 import PyKDL
 
-def stamped_transform_to_pose(t):
-    t = t.transform
-    return Pose(position=Point(x=t.translation.x, y=t.translation.y, z=t.translation.z),
-                orientation=Quaternion(x=t.rotation.x, y=t.rotation.y, z=t.rotation.z, w=t.rotation.w))
 
+#--------From list of 'choices', randomly assign a weight from 'probabilities' 'n' times and return results------------
 def draw_random_sample(choices, probabilities, n):
     """ Return a random sample of n elements from the set choices with the specified probabilities
             choices: the values to sample from represented as a list
             probabilities: the probability of selecting each element in choices represented as a list
             n: the number of samples
     """
-    values = np.array(range(len(choices)))
-    probs = np.array(probabilities)
-    bins = np.add.accumulate(probs)
-    inds = values[np.digitize(random_sample(n), bins)]
-    samples = []
-    for i in inds:
-        samples.append(deepcopy(choices[int(i)]))
+    values = np.array(range(len(choices)))              # Create an array from 0 to number of choices
+    probs = np.array(probabilities)                     # Convert 'probabilities' to an array
+    
+    # Add each probability to the sum of previous probabilities and store each result (ie 1 = 1st prob, 2 = 1st prob + 2nd prob, etc)
+    bins = np.add.accumulate(probs)                                                         
+    
+    inds = values[np.digitize(random_sample(n), bins)]  # separate each 'bins' value into intervals for 'n' samples
+    samples = []                                        # Initalize empty list to hold samples
+    
+    for i in inds:                                      #For each sample...
+        samples.append(deepcopy(choices[int(i)]))       #...add to samples list
     return samples
 
+#--------Represent ROS transform msg as ROS pose msg-----------------------------------------------------------
+def stamped_transform_to_pose(t):
+    t = t.transform
+    return Pose(position=Point(x=t.translation.x, y=t.translation.y, z=t.translation.z),
+                orientation=Quaternion(x=t.rotation.x, y=t.rotation.y, z=t.rotation.z, w=t.rotation.w))
+
 class TFHelper(object):
-    """ TFHelper Provides functionality to convert poses between various
+    """ TFHelper provides functionality to convert poses between various
         forms, compare angles in a suitable way, and publish needed
         transforms to ROS """
     def __init__(self, node):
@@ -47,7 +54,10 @@ class TFHelper(object):
         self.tf_broadcaster = TransformBroadcaster(node)
         self.node = node        # hold onto this for logging
         self.transform_tolerance = Duration(seconds=0.08)    # tolerance for mismatch between scan and odom timestamp
-
+    
+    #-------Additional Conversion Functions-----------------------------------------------------------
+    
+    # Convert Python values (translation & rotation) to  ROS pose msg (position & orientation)
     def convert_translation_rotation_to_pose(self, translation, rotation):
         """ Convert from representation of a pose as translation and rotation
             (Quaternion) tuples to a geometry_msgs/Pose message """
@@ -59,6 +69,7 @@ class TFHelper(object):
                                            z=rotation[2],
                                            w=rotation[3]))
 
+    # Match orientation to postion using ROS pose msg
     def convert_pose_to_xy_and_theta(self, pose):
         """ Convert pose (geometry_msgs.Pose) to a (x,y,yaw) tuple """
         orientation_tuple = (pose.orientation.x,
@@ -68,10 +79,14 @@ class TFHelper(object):
         angles = euler_from_quaternion(*orientation_tuple)
         return (pose.position.x, pose.position.y, angles[2])
 
+    #--------Angle Helper Functions-----------------------------------------------------------
+    
+    # Normalize for angle consistency
     def angle_normalize(self, z):
         """ convenience function to map an angle to the range [-pi,pi] """
         return math.atan2(math.sin(z), math.cos(z))
 
+    # Calculate bearing between two points
     def angle_diff(self, a, b):
         """ Calculates the difference between angle a and angle b (both should
             be in radians) the difference is always based on the closest
@@ -92,6 +107,9 @@ class TFHelper(object):
         else:
             return d2
 
+    #-------Map Helper Functions-----------------------------------------------------------
+    
+    #Adjust for map offset
     def fix_map_to_odom_transform(self, robot_pose, odom_pose):
         """ This method constantly updates the offset of the map and
             odometry coordinate systems based on the latest results from
@@ -121,6 +139,7 @@ class TFHelper(object):
         self.translation = odom_to_map.p
         self.rotation = odom_to_map.M.GetQuaternion()
 
+    # Publish adjusted map to odom transform
     def send_last_map_to_odom_transform(self, map_frame, odom_frame, timestamp):
         if (not hasattr(self, 'translation') or
             not hasattr(self, 'rotation')):
@@ -138,6 +157,7 @@ class TFHelper(object):
         transform.transform.rotation.w = self.rotation[3]
         self.tf_broadcaster.sendTransform(transform)
 
+    # 
     def get_matching_odom_pose(self, odom_frame, base_frame, timestamp):
         """ Find the odometry position for a given timestamp.  We want to avoid blocking, so if the transform is
             not ready, we return None.
@@ -158,6 +178,9 @@ class TFHelper(object):
         else:
             return (None, None)
 
+    #-------Laser Scan Helper Functions-----------------------------------------------------------
+    
+    # Convert laser scan data to polar coordinates in the robot frame
     def convert_scan_to_polar_in_robot_frame(self, msg, base_frame):
         """ Convert the scan data to a polar representation in the robot frame.
             The reason that we have to do this differently than in the warmup project

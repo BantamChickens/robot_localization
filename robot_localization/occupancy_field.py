@@ -36,6 +36,7 @@ class OccupancyField(object):
                                                                             self.map.info.height)) 
         
         # -------------------Setup the map and obstacles--------------------------------------------------------
+        
         # Create a grid of all the cells in the map
         X = np.zeros((self.map.info.width*self.map.info.height, 2))   #initialize an empty grid the same width and height as map
 
@@ -79,7 +80,8 @@ class OccupancyField(object):
         node.get_logger().info("populating occupancy field")                #print
         
         self.closest_occ = np.zeros((self.map.info.width, self.map.info.height)) #create empty grid same width and height as map
-        
+        curr = 0                                                                #initalize current row to 0
+
         for i in range(self.map.info.width):                                     #for each column...
             for j in range(self.map.info.height):                                #...loop through each row...  
                 self.closest_occ[i, j] = \
@@ -98,7 +100,7 @@ class OccupancyField(object):
         upper_bounds = self.occupied.max(axis=0) #find the largest x and y cordinates
         r = self.map.info.resolution             #cell size in meters
         
-        # 
+        
         return ((lower_bounds[0]*r + self.map.info.origin.position.x,   #return (x_lower, x_upper), (y_lower, y_upper) in meters
                  upper_bounds[0]*r + self.map.info.origin.position.x),
                 (lower_bounds[1]*r + self.map.info.origin.position.y,
@@ -119,6 +121,7 @@ class OccupancyField(object):
             y_coord = int(y_coord)
 
         is_valid = (x_coord >= 0) & (y_coord >= 0) & (x_coord < self.map.info.width) & (y_coord < self.map.info.height)
+        
         if type(x) is np.ndarray:
             distances = np.float('nan')*np.ones(x_coord.shape)
             distances[is_valid] = self.closest_occ[x_coord[is_valid], y_coord[is_valid]]
