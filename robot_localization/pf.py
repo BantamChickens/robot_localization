@@ -71,43 +71,51 @@ class ParticleFilter(Node):
     """
     def __init__(self):
         super().__init__('pf')
+        
+        #----------Set cordinate frames and configuration parameters------------------------------------------------
         self.base_frame = "base_footprint"   # the frame of the robot base
-        self.map_frame = "map"          # the name of the map coordinate frame
-        self.odom_frame = "odom"        # the name of the odometry coordinate frame
-        self.scan_topic = "scan"        # the topic where we will get laser scans from 
+        self.map_frame = "map"               # map coordinate frame name
+        self.odom_frame = "odom"             # odometry coordinate frame name
+        self.scan_topic = "scan"             # the topic where we will get laser scans from 
 
-        self.n_particles = 300          # the number of particles to use
+        self.n_particles = 300               # the number of particles to use
 
-        self.d_thresh = 0.2             # the amount of linear movement before performing an update
-        self.a_thresh = math.pi/6       # the amount of angular movement before performing an update
+        self.d_thresh = 0.2                  # the amount of linear movement before performing an update
+        self.a_thresh = math.pi/6            # the amount of angular movement before performing an update
 
         # TODO: define additional constants if needed
+        self.particle_stddev_x = 0.1
+        self.particle_stddev_y = 0.1
+        self.particle_stddev_theta = 0.1
 
+        #-------------------Publishers and Subscribers------------------------------------------------
         # pose_listener responds to selection of a new approximate robot location (for instance using rviz)
         self.create_subscription(PoseWithCovarianceStamped, 'initialpose', self.update_initial_pose, 10)
-
-        # publish the current particle cloud.  This enables viewing particles in rviz.
-        self.particle_pub = self.create_publisher(ParticleCloud, "particle_cloud", qos_profile_sensor_data)
 
         # laser_subscriber listens for data from the lidar
         self.create_subscription(LaserScan, self.scan_topic, self.scan_received, 10)
 
-        # this is used to keep track of the timestamps coming from bag files
-        # knowing this information helps us set the timestamp of our map -> odom
-        # transform correctly
-        self.last_scan_timestamp = None
-        # this is the current scan that our run_loop should process
-        self.scan_to_process = None
-        # your particle cloud will go here
-        self.particle_cloud = []
+        # publish the current particle cloud.  This enables viewing particles in rviz.
+        self.particle_pub = self.create_publisher(ParticleCloud, "particle_cloud", qos_profile_sensor_data)
 
+        #-------------------Set up inital filter states------------------------------------------------
+        # knowing incoming timestamp info helps us set the timestamp of our map -> odom transform correctly
+        self.last_scan_timestamp = None # keeps track of the timestamps coming from bag files  
+        self.scan_to_process = None     # current scan that run_loop should process
+        
+        self.particle_cloud = []        # particle cloud will go here
         self.current_odom_xy_theta = []
+        
+        #-------------------Store and initialize classes from other files------------------------------------------------
         self.occupancy_field = OccupancyField(self)
         self.transform_helper = TFHelper(self)
-
+        
+        #-------------------Multi threading------------------------------------------------
         # we are using a thread to work around single threaded execution bottleneck
         thread = Thread(target=self.loop_wrapper)
         thread.start()
+
+        #-------------------Timer------------------------------------------------
         self.transform_update_timer = self.create_timer(0.05, self.pub_latest_transform)
 
     def pub_latest_transform(self):
@@ -174,7 +182,7 @@ class ParticleFilter(Node):
                math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]) > self.d_thresh or \
                math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > self.a_thresh
 
-
+    #Update most likely robot location based on new particle info
     def update_robot_pose(self):
         """ Update the estimate of the robot's pose given the updated particles.
             There are two logical methods for this:
@@ -246,15 +254,31 @@ class ParticleFilter(Node):
         if xy_theta is None:
             xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose)
         self.particle_cloud = []
-        # TODO create particles
+        # TODO (done) create particles
+        for i in range(self.n_particles): #for each particle...
+            # add random noise to x, y and theta centered around 
+            x = np.random.normal(xy_theta[0], self.particle_stddev_x) 
+            y = np.random.normal(xy_theta[1], self.particle_stddev_y)
+            theta = np.random.normal(xy_theta[2], self.particle_stddev_theta)
 
+            #add particle to empty particle cloud list
+            self.particle_cloud.append(Particle(x=x, y=y, theta=theta))
+
+        #center particles    
         self.normalize_particles()
+
+        #update most likely robot location
         self.update_robot_pose()
 
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
-        # TODO: implement this
-        pass
+        # TODO (done): implement this
+
+        sum_particles = sum(particle.w for particle in self.particle_cloud) #Find the sum of all of the particle weights
+        if not math.isclose(sum_particles, 1.0, abs_tol = 1e-9):                #if the sum is not already 1 (accounts for 0.9999999999)...
+            for particle in self.particle_cloud:                                #...normalize
+                particle.w = particle.w / sum_particles
+        
 
     def publish_particles(self, timestamp):
         msg = ParticleCloud()
