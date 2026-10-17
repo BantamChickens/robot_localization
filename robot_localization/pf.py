@@ -15,10 +15,10 @@ from rclpy.duration import Duration
 import math
 import time
 import numpy as np
-from occupancy_field import OccupancyField
-from helper_functions import TFHelper
+from .occupancy_field import OccupancyField
+from .helper_functions import TFHelper
+from .angle_helpers import quaternion_from_euler
 from rclpy.qos import qos_profile_sensor_data
-from angle_helpers import quaternion_from_euler
 
 class Particle(object):
     """ Represents a hypothesis (particle) of the robot's pose consisting of x,y and theta (yaw)
@@ -202,18 +202,18 @@ class ParticleFilter(Node):
             #particle_pose.append(pose_index)
         
         best_guess = max(self.particle_cloud, key= lambda p: p.w)
-        x = best_guess[0]
-        y = best_guess[1]
-        q = quaternion_from_euler(0, 0, best_guess[2])
+        x = best_guess.x
+        y = best_guess.y
+        q = quaternion_from_euler(0, 0, best_guess.theta)
         
         self.robot_pose = Pose(position=Point(x=x, y=y, z=0.0),
                                orientation=Quaternion(x=q[0], y=q[1], z=q[2], w=q[3]))
         
-        if hasattr(self, 'odom_pose'):
-            self.transform_helper.fix_map_to_odom_transform(self.robot_pose,
-                                                            self.odom_pose)
-        else:
-            self.get_logger().warn("Can't set map->odom transform since no odom data received")
+        #if hasattr(self, 'odom_pose'):
+            #self.transform_helper.fix_map_to_odom_transform(self.robot_pose,
+                                                            #self.odom_pose)
+        #else:
+            #self.get_logger().warn("Can't set map->odom transform since no odom data received")
 
     def update_particles_with_odom(self):
         """ Update the particles using the newly given odometry pose.
