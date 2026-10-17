@@ -209,11 +209,11 @@ class ParticleFilter(Node):
         self.robot_pose = Pose(position=Point(x=x, y=y, z=0.0),
                                orientation=Quaternion(x=q[0], y=q[1], z=q[2], w=q[3]))
         
-        #if hasattr(self, 'odom_pose'):
-            #self.transform_helper.fix_map_to_odom_transform(self.robot_pose,
-                                                            #self.odom_pose)
-        #else:
-            #self.get_logger().warn("Can't set map->odom transform since no odom data received")
+        if hasattr(self, 'odom_pose'):
+            self.transform_helper.fix_map_to_odom_transform(self.robot_pose,
+                                                            self.odom_pose)
+        else:
+            self.get_logger().warn("Can't set map->odom transform since no odom data received")
 
     def update_particles_with_odom(self):
         """ Update the particles using the newly given odometry pose.
