@@ -235,6 +235,8 @@ class ParticleFilter(Node):
             return
 
         # TODO: modify particles using delta
+    def modify_delta(self, delta)
+        self.particle_cloud = self.particle_cloud + delta
 
     def resample_particles(self):
         """ Resample the particles according to the new particle weights.
