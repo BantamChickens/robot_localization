@@ -280,19 +280,25 @@ class ParticleFilter(Node):
         # make sure the distribution is normalized
         self.normalize_particles()
         # TODO: figure out how to incoperate the weights
-        particle_x_avg_list = []
-        particle_y_avg_list = []
+        #particle_x_avg_list = []
+        #particle_y_avg_list = []
+        running_particle = 0
+        x_running = []
+        y_running = []
         for particle in self.particle_cloud:
-            particle_x_avg_list.append(particle.x)
-            particle_y_avg_list.append(particle.y)
-        average_x = sum(particle_x_avg_list)/len(particle_x_avg_list)
-        average_y = sum(particle_y_avg_list)/len(particle_y_avg_list)
-        new_x_list = np.random.normal(loc=average_x, scale=5, size=1, len(particle_x_avg_list))
-        new_y_list = np.random.normal(loc=average_y, scale=5, size=1, len(particle_y_avg_list))
-        for particle in self.particle_cloud:get
-            particle.x = new_x_list
-            particle.y = new_y_list
-
+            if particle.w > running_particle
+                running_particle = particle.w
+                x_running = particle.x
+                y_running = particle.y
+    
+        new_x_list = np.random.normal(loc=x_running, scale=5, size=1, len(particle_cloud))
+        new_y_list = np.random.normal(loc=y_running, scale=5, size=1, len(particle_cloud))
+        for i = 0:200
+            self.particle_cloud[i].x = new_x_list[np.random.randint(0, len(new_x_list))]
+            self.particle_cloud[i].y= new_y_list[np.random.randint(0, len(new_y_list))]
+        for i = 200:len(particle_cloud)
+            self.particle_cloud[i].x = (np.random.randint(0, self.occupancy_field.map.width)) * .resolution
+            self.particle_cloud[i].y = (np.random.randint(0, self.occupancy_field.map.height)) * .resolution
 
 
     def update_particles_with_laser(self, r, theta):
@@ -307,15 +313,15 @@ class ParticleFilter(Node):
         # get closest obstacle returns a single number - use it on every laser scan point of every particle
         #take the sum of all closest obstacles 
         #make a formular that creates a higher weight for a lower sum off all closest values for that particle
-        final_list = []
-        running_sum = []
+        #final_list = []
+        #running_sum = []
+        #for particle in particle_cloud
+            #for distance in particle 
+               #running_sum = running_sum.append(get_closest_obstacle_distance(distance))
+            #final_list = final_list.append(sum(running_sum))
+            #running_sum = []
         for particle in particle_cloud
-            for distance in particle 
-               running_sum = running_sum.append(get_closest_obstacle_distance(distance))
-            final_list = final_list.append(sum(running_sum))
-            running_sum = []
-        for particle in particle_cloud
-            particle.w = 1/(final_list[particle])
+            particle.w = 1/(get_closest_obstacle_distance(particle.x,particle.y)- min(scan))
         
 
     def update_initial_pose(self, msg):
