@@ -15,10 +15,10 @@ from rclpy.duration import Duration
 import math
 import time
 import numpy as np
-from .occupancy_field import OccupancyField
-from .helper_functions import TFHelper
-from .angle_helpers import quaternion_from_euler
+from occupancy_field import OccupancyField
+from helper_functions import TFHelper
 from rclpy.qos import qos_profile_sensor_data
+from angle_helpers import quaternion_from_euler
 
 class Particle(object):
     """ Represents a hypothesis (particle) of the robot's pose consisting of x,y and theta (yaw)
@@ -182,7 +182,7 @@ class ParticleFilter(Node):
                math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]) > self.d_thresh or \
                math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > self.a_thresh
 
-    #Update guess of most likely robot location based on new particle info
+    #Update most likely robot location based on new particle info
     def update_robot_pose(self):
         """ Update the estimate of the robot's pose given the updated particles.
             There are two logical methods for this:
@@ -202,9 +202,9 @@ class ParticleFilter(Node):
             #particle_pose.append(pose_index)
         
         best_guess = max(self.particle_cloud, key= lambda p: p.w)
-        x = best_guess.x
-        y = best_guess.y
-        q = quaternion_from_euler(0, 0, best_guess.theta)
+        x = best_guess[0]
+        y = best_guess[1]
+        q = quaternion_from_euler(0, 0, best_guess[2])
         
         self.robot_pose = Pose(position=Point(x=x, y=y, z=0.0),
                                orientation=Quaternion(x=q[0], y=q[1], z=q[2], w=q[3]))
@@ -233,10 +233,43 @@ class ParticleFilter(Node):
         else:
             self.current_odom_xy_theta = new_odom_xy_theta
             return
+        # current_particle = np.array([
+        #     [particle.x]
+        #     [particle.y]
+        #     [1 ]
+        #     ])
+        # matrix = np.array([
+        #     [cos(theta), - sin(theta), delta[0]]
+        #     [sin(theta), cos(theta), delta[1]]
+        #     [0, 0, 1 ]
+        #     ])
+        for particle in self.particle_cloud:
+            
+            particle.x = [particle.x*cos(delta[3])+particle.y*sin(delta[3]+delta[0])]
+            particle.y = [-1*particle.y*sin(delta[3])+particle.y*cos(delta[3]+delta[1])]
+            particle.theta = [particle.theta + delta[3]]
 
-        # TODO: modify particles using delta
-    def modify_delta(self, delta):
-        self.particle_cloud = self.particle_cloud + delta
+
+
+    #     # TODO: hopefully done I did this it was very wrong :(
+    # def modify_delta(self, delta)
+    # """ this function takes uses the movement of the actual neato and applies it to the particles"
+    #     for particle in self.particle_cloud:
+    #         theta = particle.theta - PoseStamped.theta 
+    #         x = particle.x + PoseStamped.x + cos(theta)
+    #         y = particle.y + + PoseStamped.y + sin(theta)
+            
+    #         current_particle = np.array([
+    #             [particle.x]
+    #             [particle.y]
+    #             [1 ]
+    #             ])
+    #         matrix = np.array([
+    #             [cos(theta), - sin(theta, x)]
+    #             [sin(that, cos(theta, y))]
+    #             [0, 0, 1 ]
+    #             ])
+    #         self.particle_cloud[particle] matrix * current_particle
 
     def resample_particles(self):
         """ Resample the particles according to the new particle weights.
@@ -246,7 +279,21 @@ class ParticleFilter(Node):
         """
         # make sure the distribution is normalized
         self.normalize_particles()
-        # TODO: fill out the rest of the implementation
+        # TODO: figure out how to incoperate the weights
+        particle_x_avg_list = []
+        particle_y_avg_list = []
+        for particle in self.particle_cloud:
+            particle_x_avg_list.append(particle.x)
+            particle_y_avg_list.append(particle.y)
+        average_x = sum(particle_x_avg_list)/len(particle_x_avg_list)
+        average_y = sum(particle_y_avg_list)/len(particle_y_avg_list)
+        new_x_list = np.random.normal(loc=average_x, scale=5, size=1, len(particle_x_avg_list))
+        new_y_list = np.random.normal(loc=average_y, scale=5, size=1, len(particle_y_avg_list))
+        for particle in self.particle_cloud:get
+            particle.x = new_x_list
+            particle.y = new_y_list
+
+
 
     def update_particles_with_laser(self, r, theta):
         """ Updates the particle weights in response to the scan data
@@ -254,7 +301,22 @@ class ParticleFilter(Node):
             theta: the angle relative to the robot frame for each corresponding reading 
         """
         # TODO: implement this
-        pass
+        # loop through all particles
+        #for each one loop through apll angles in its projected laser scan
+        # call a function in occupancy feild called get closeet obstacle 
+        # get closest obstacle returns a single number - use it on every laser scan point of every particle
+        #take the sum of all closest obstacles 
+        #make a formular that creates a higher weight for a lower sum off all closest values for that particle
+        final_list = []
+        running_sum = []
+        for particle in particle_cloud
+            for distance in particle 
+               running_sum = running_sum.append(get_closest_obstacle_distance(distance))
+            final_list = final_list.append(sum(running_sum))
+            running_sum = []
+        for particle in particle_cloud
+            particle.w = 1/(final_list[particle])
+        
 
     def update_initial_pose(self, msg):
         """ Callback function to handle re-initializing the particle filter based on a pose estimate.
