@@ -290,15 +290,15 @@ class ParticleFilter(Node):
                 running_particle = particle.w
                 x_running = particle.x
                 y_running = particle.y
-    
+                print(running_particle)
         new_x_list = np.random.normal(loc=x_running, scale=5, size=1, len(particle_cloud))
         new_y_list = np.random.normal(loc=y_running, scale=5, size=1, len(particle_cloud))
         for i = 0:200
             self.particle_cloud[i].x = new_x_list[np.random.randint(0, len(new_x_list))]
             self.particle_cloud[i].y= new_y_list[np.random.randint(0, len(new_y_list))]
         for i = 200:len(particle_cloud)
-            self.particle_cloud[i].x = (np.random.randint(0, self.occupancy_field.map.width)) * .resolution
-            self.particle_cloud[i].y = (np.random.randint(0, self.occupancy_field.map.height)) * .resolution
+            self.particle_cloud[i].x = (np.random.uniform(0, self.occupancy_field.map.width)) * self.occupancy_field.map.resolution
+            self.particle_cloud[i].y = (np.random.uniform(0, self.occupancy_field.map.height)) * self.occupancy_field.map.resolution
 
 
     def update_particles_with_laser(self, r, theta):
@@ -322,7 +322,8 @@ class ParticleFilter(Node):
             #running_sum = []
         for particle in particle_cloud
             particle.w = 1/(get_closest_obstacle_distance(particle.x,particle.y)- min(scan))
-        
+        print(minscan)
+        print(particle_cloud[1].w)
 
     def update_initial_pose(self, msg):
         """ Callback function to handle re-initializing the particle filter based on a pose estimate.
