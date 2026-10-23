@@ -15,17 +15,20 @@ import random
 
 
 class MotionModel(Node):
-    """A class that implements a node to pilot a robot in a square.
+    """A class that implements a node to calculate and publish command velocities .
     """
-
+    #--------------------------------------------Setup----------------------------------------------------
     def __init__(self):
-        super().__init__('motion')
-        # create a thread to handle long-running component
-        self.vel_pub = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.max_angle = 90
-        self.angle_step = 15
-        self.angular_vel = 0.3
+        super().__init__('motion')  #name of node
+        #------------------Variables-----------------------------
+        self.max_angle = 90                                        # Max turn angle (used 90 as a starting place to aviod turning too sharp)
+        self.angle_step = 15                                       # Discretized angles as a base for troubleshooting
+        self.angular_vel = 0.3                                     # Turn speed
 
+        #-----------------Publishers and Subscribers--------------
+        self.vel_pub = self.create_publisher(Twist, 'cmd_vel', 10) #Publishes cmd_vel topic
+
+    #--------------------------------------------Publisher Setup------------------------------------------
     def drive(self, linear, angular):
         """Drive with the specified linear and angular velocity.
 
@@ -37,10 +40,12 @@ class MotionModel(Node):
         msg.linear.x = linear
         msg.angular.z = angular
         self.vel_pub.publish(msg)
-    
+
+    #-------------------------------------------Helper Functions-------------------------------------------
     def degrees2radians(self, num_list):
-        return [math.radians(angle) for angle in num_list]
+        return [math.radians(angle) for angle in num_list] # Converts a list of angles in degrees to radians
     
+    #-------------------------------------------Direction Mechanisms----------------------------------------
     def turn(self):
         """Execute a 90 degree left turn
         """
@@ -76,6 +81,7 @@ class MotionModel(Node):
         sleep(distance / forward_vel)
         self.drive(linear=0.0, angular=0.0)
 
+    #-----------------------------------------------Main Loop---------------------------------------
     def run_loop(self):
         """Executes the main logic for driving the square.  This function does
         not return until the square is finished or the estop is pressed.

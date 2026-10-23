@@ -10,7 +10,7 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import LaserScan
 from nav2_msgs.msg import ParticleCloud, Particle
 from nav2_msgs.msg import Particle as Nav2Particle
-from geometry_msgs.msg import PoseWithCovarianceStamped, Pose, Point, Quaternion
+from geometry_msgs.msg import PoseWithCovarianceStamped, Pose, Point, Quaternion, Twist
 from rclpy.duration import Duration
 import math
 import time
@@ -76,7 +76,8 @@ class ParticleFilter(Node):
         self.base_frame = "base_footprint"   # the frame of the robot base
         self.map_frame = "map"               # map coordinate frame name
         self.odom_frame = "odom"             # odometry coordinate frame name
-        self.scan_topic = "scan"             # the topic where we will get laser scans from 
+        self.scan_topic = "scan"             # the topic where we will get laser scans from
+        self.vel_topic = "cmd_vel"
 
         self.n_particles = 300               # the number of particles to use
 
@@ -94,6 +95,7 @@ class ParticleFilter(Node):
 
         # laser_subscriber listens for data from the lidar
         self.create_subscription(LaserScan, self.scan_topic, self.scan_received, 10)
+        self.create_subscription(Twist, self.vel_topic, self.cmd_received, 10)
 
         # publish the current particle cloud.  This enables viewing particles in rviz.
         self.particle_pub = self.create_publisher(ParticleCloud, "particle_cloud", qos_profile_sensor_data)
@@ -101,6 +103,7 @@ class ParticleFilter(Node):
         #-------------------Set up inital filter states------------------------------------------------
         # knowing incoming timestamp info helps us set the timestamp of our map -> odom transform correctly
         self.last_scan_timestamp = None # keeps track of the timestamps coming from bag files  
+        self.vel_to_process = None
         self.scan_to_process = None     # current scan that run_loop should process
         
         self.particle_cloud = []        # particle cloud will go here
@@ -215,6 +218,25 @@ class ParticleFilter(Node):
         else:
             self.get_logger().warn("Can't set map->odom transform since no odom data received")
 
+    def update_particles_with_vel(self):
+        self.cmd_odom_theta = self.angular_vel
+        self.cmd_odom_lin_x = self.linear_vel * math.cos(self.cmd_odom_theta)
+        self.cmd_odom_lin_y = self.linear_vel * math.sin(self.cmd_odom_theta)
+                
+        new_odom_vel = [self.cmd_odom_lin_x, self.cmd_odom_lin_y, self.cmd_odom_theta]
+                
+        if self.current_odom_vel:
+            old_odom_vel = self.current_odom_vel
+            delta = (new_odom_vel[0] - self.current_odom_vel[0],
+                     new_odom_vel[1] - self.current_odom_xy_theta[1],
+                     new_odom_vel[2] - self.current_odom_xy_theta[2])
+
+            self.current_odom_vel = new_odom_vel
+                
+        else:
+            self.current_odom_vel = new_odom_vel
+            return
+
     def update_particles_with_odom(self):
         """ Update the particles using the newly given odometry pose.
             The function computes the value delta which is a tuple (x,y,theta)
@@ -310,6 +332,13 @@ class ParticleFilter(Node):
         # self.scan_to_process is set to None in the run_loop 
         if self.scan_to_process is None:
             self.scan_to_process = msg
+
+    def cmd_received(self, msg):
+        if self.vel_to_process is None:
+            self.vel_to_process = msg
+        
+        self.linear_vel = float(msg.linear.x)
+        self.angular_vel = float(msg.angular.z)
 
 def main(args=None):
     rclpy.init()
