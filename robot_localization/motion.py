@@ -47,7 +47,7 @@ class MotionModel(Node):
     
     #-------------------------------------------Direction Mechanisms----------------------------------------
     def turn(self):
-        """Execute a 90 degree left turn
+        """Execute left and right turns at random angles
         """
         angles_list = list(
             range(

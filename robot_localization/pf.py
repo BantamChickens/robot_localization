@@ -219,6 +219,9 @@ class ParticleFilter(Node):
             self.get_logger().warn("Can't set map->odom transform since no odom data received")
 
     def update_particles_with_vel(self):
+        """(In progress) Update the particles based on the command velocities of
+            the robot. After this is implemented, there will be a Boolean to call either
+            this function or update_particles_with_vel"""
         self.cmd_odom_theta = self.angular_vel
         self.cmd_odom_lin_x = self.linear_vel * math.cos(self.cmd_odom_theta)
         self.cmd_odom_lin_y = self.linear_vel * math.sin(self.cmd_odom_theta)
@@ -267,8 +270,8 @@ class ParticleFilter(Node):
         #     ])
         for particle in self.particle_cloud:
             
-            particle.x = [particle.x*cos(delta[3])+particle.y*sin(delta[3]+delta[0])]
-            particle.y = [-1*particle.y*sin(delta[3])+particle.y*cos(delta[3]+delta[1])]
+            particle.x = [particle.x * math.cos(delta[3]) + particle.y*math.sin(delta[3]+delta[0])]
+            particle.y = [-1*particle.y*math.sin(delta[3])+particle.y*math.cos(delta[3]+delta[1])]
             particle.theta = [particle.theta + delta[3]]
 
 
